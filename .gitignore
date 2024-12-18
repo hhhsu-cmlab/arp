@@ -156,3 +156,5 @@ rlb/point-renderer
 real-robot/outputs
 real-robot/weights
 real-robot/data
+
+mnist
