@@ -83,6 +83,7 @@ def hf_transform_to_torch(items_dict: Dict[str, Optional[torch.Tensor]]):
 def load_hf_dataset(repo_id, version, root, split) -> datasets.Dataset:
     """hf_dataset contains all the observations, states, actions, rewards, etc."""
     if root is not None:
+        print(f"[load_hf_dataset] root: {root}")
         hf_dataset = load_from_disk(str(Path(root) / repo_id / "train"))
         # TODO(rcadene): clean this which enables getting a subset of dataset
         if split != "train":

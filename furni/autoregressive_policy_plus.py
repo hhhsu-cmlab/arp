@@ -39,6 +39,9 @@ from utils.layers import (
 from arp import AutoRegressivePolicy, TokenType, LayerType, ModelConfig
 from autoregressive_policy import MultiViewTransformer, Policy
 
+class SimplePolicyNetwork(nn.Module):
+    
+
 
 class PolicyNetwork(nn.Module):
     def __init__(self, model_cfg, env_cfg, render_device):

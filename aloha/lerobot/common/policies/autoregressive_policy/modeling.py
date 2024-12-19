@@ -236,6 +236,9 @@ class AutoregressiveModel(nn.Module):
             tk_ids = torch.as_tensor(tk_ids).to(dev)[None, :, None].repeat(batch_size, 1, 1)
             tks = torch.cat([tk_vals, tk_ids], dim=-1) 
             chk_ids = torch.as_tensor(chk_ids, device=dev)[None, :]
+
+            import pdb; pdb.set_trace()
+
             loss_dict = self.policy.compute_loss(tks, chk_ids, contexts={ 'visual-tokens': encoder_out, 
                         'visual-featmap': visual_featmap, 
                         'smooth-heatmap-right': heatmap_right.flatten(0, 1), 

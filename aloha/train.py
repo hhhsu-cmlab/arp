@@ -443,7 +443,8 @@ def train(cfg: DictConfig, out_dir: str  = None, job_name: str  = None):
     logging.info("End of training")
 
 
-@hydra.main(version_base="1.2", config_name="default", config_path="./configs")
+#@hydra.main(version_base="1.2", config_name="default", config_path="./configs")
+@hydra.main(config_name="default", config_path="./configs")
 def train_cli(cfg: dict):
     train(
         cfg,

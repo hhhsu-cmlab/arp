@@ -1,126 +1,154 @@
 hydra:
+  run:
+    dir: outputs/train/${now:%H-%M-%S}_${env.name}_${policy.name}_${hydra.job.name}
   job:
     name: default
-    chdir: false
-  run:
-    dir: outputs/${hydra.job.name}/${now:%Y-%m-%d_%H-%M}
-  
-# ================================================ #
 
-py_module: autoregressive_policy_plus
+resume: false
+device: cpu # cuda:1
+use_amp: false
+seed: 1000
 
-model:
-  weights: null
+dataset_repo_id: lerobot/aloha_sim_insertion_human # FIXME
+dataset_root: ./data/
+video_backend: pyav
 
-  hp:
-    add_corr: true
-    add_depth: true
-    add_lang: true
-    add_pixel_loc: true
-    add_proprio: true
-    attn_dim: 512
-    attn_dim_head: 64
-    attn_dropout: 0.1
-    attn_heads: 8
-    depth: 8
-    feat_dim: 220 # 72*3 + 4
-    im_channels: 64
-    point_augment_noise: 0.05
-    img_feat_dim: 3
-    img_patch_size: 14
-    img_size: 224
-    lang_dim: 512
-    lang_len: 77
-    norm_corr: true
-    pe_fix: true
-    proprio_dim: 3 # 4 # 18
-    mvt_cameras: ['top', 'left', 'front']
-    stage2_zoom_scale: 4
-    stage2_waypoint_label_noise: 0.05
-    rotation_aug: #null
-      - [-2, -1, 0, -1, -2]
-      - [0.1, 0.2, 0.4, 0.2, 0.1]
-    use_xformers: true
+wandb:
+  enable: false
+  # Set to true to disable saving an artifact despite save_checkpoint == True
+  disable_artifact: true
+  project: aloha
+  notes: ""
+  log_video: false
 
-    gt_hm_sigma: 1.5
-    move_pc_in_bound: true
-    place_with_mean: false
-
-    amp: True
-    bnb: True
-
-    # lr should be thought on per sample basis
-    # effective lr is multiplied by bs * num_devices
-    lr: 1.25e-5 #1.25e-5 # 1e-4
-    warmup_steps: 2000
-    optimizer_type: lamb
-    lr_cos_dec: true
-    add_rgc_loss: true
-    transform_augmentation: true
-    transform_augmentation_xyz: [0.125, 0.125, 0.125]
-    transform_augmentation_rpy: [0.0, 0.0, 45.0]
-    lambda_weight_l2: 1e-4 # 1e-6
-    num_rotation_classes: 72
-
-    cos_dec_max_step: -1 # will be override during training
-
-    render_with_cpp: true
-
-    # arp_cfg: 
-    #   TODO: true
-
-
+fps: 50
 env:
-  tasks: all # stack_cups
-  cameras: ["front", "left_shoulder", "right_shoulder", "wrist"]
-  scene_bounds: [-0.3, -0.5, 0.6, 0.7, 0.5, 1.6] # [x_min, y_min, z_min, x_max, y_max, z_max] - the metric volume to be voxelized
-  image_size: 128
-  time_in_state: false
-  voxel_size: 100
-  episode_length: 25
-  rotation_resolution: 5
-  origin_style_state: true
+  name: aloha
+  task: AlohaInsertion-v0  # FIXME
+  state_dim: 14
+  action_dim: 14
+  fps: ${fps}
+  episode_length: 400
+  gym:
+    obs_type: pixels_agent_pos
+    render_mode: rgb_array
 
-train:
-  bs: 96 # 48
-  demo_folder: ./data/train
-  epochs: 100 # 100
-  num_gpus: 4
-  num_workers: 8 #, need larger value
-  num_transitions_per_epoch: 160000
-  disp_freq: 100
-  cached_dataset_path: null
-  save_freq: 10000
-  eval_mode: false
-  k2k_sample_ratios: 
-    place_cups: 1.0
-    stack_cups: 1.0
-    close_jar: 1.0
-    push_buttons: 1.0
-    meat_off_grill: 1.0
-    stack_blocks: 1.0
-    reach_and_drag: 1.0
-    slide_block_to_color_target: 1.0
-    place_shape_in_shape_sorter: 1.0
-    open_drawer: 1.0
-    sweep_to_dustpan_of_size: 1.0
-    put_groceries_in_cupboard: 1.0
-    light_bulb_in: 1.0
-    turn_tap: 1.0
-    insert_onto_square_peg: 1.0
-    put_item_in_drawer: 1.0
-    put_money_in_safe: 1.0
-    place_wine_at_rack_location: 1.0
+
+training:
+  offline_steps: 100000
+  online_steps: 0
+  eval_freq: 10000
+  save_freq: 20000
+  log_freq: 200
+
+  lr_scheduler: default 
+  lr_warmup_steps: 500
+
+
+  save_checkpoint: true
+  num_workers: 4
+
+  batch_size: 8
+  lr: 1e-5
+  lr_backbone: 1e-5
+  weight_decay: 1e-4
+  grad_clip_norm: 10
+  online_steps_between_rollouts: 1
+
+  delta_timestamps:
+    action: "[i / ${fps} for i in range(${policy.chunk_size})]"
+    left_pts_2d: "[i / ${fps} for i in range(${policy.chunk_size})]"
+    right_pts_2d: "[i / ${fps} for i in range(${policy.chunk_size})]"
+
+  online_sampling_ratio: 0.5
+  online_env_seed: ???
+
+  image_transforms:
+    enable: false
+    # This is the maximum number of transforms (sampled from these below) that will be applied to each frame.
+    # It's an integer in the interval [1, number of available transforms].
+    max_num_transforms: 3
+    # By default, transforms are applied in Torchvision's suggested order (shown below).
+    # Set this to True to apply them in a random order.
+    random_order: false
+    brightness:
+      weight: 1
+      min_max: [0.8, 1.2]
+    contrast:
+      weight: 1
+      min_max: [0.8, 1.2]
+    saturation:
+      weight: 1
+      min_max: [0.5, 1.5]
+    hue:
+      weight: 1
+      min_max: [-0.05, 0.05]
+    sharpness:
+      weight: 1
+      min_max: [0.8, 1.2]
+
 
 eval:
-  datafolder: ./data/test
-  episode_num: 25
-  start_episode: 0
-  headless: true
-  save_video: false
-  device: 0
+  n_episodes: 50
+  batch_size: 50
+  use_async_envs: false
 
 
+# See `configuration_act.py` for more details.
+policy:
+  name: autoregressive_policy
 
-output_dir: ${hydra:run.dir}
-wandb: null
+  # Input / output structure.
+  n_obs_steps: 1
+  chunk_size: 100 # chunk_size
+  n_action_steps: 100
+  n_action_steps_eval: 100
+
+  input_shapes:
+    observation.images.top: [3, 480, 640]
+    observation.state: ["${env.state_dim}"]
+  output_shapes:
+    action: ["${env.action_dim}"]
+
+  # Normalization / Unnormalization
+  input_normalization_modes:
+    observation.images.top: mean_std
+    observation.state: mean_std
+  output_normalization_modes:
+    action: mean_std
+
+  # Architecture.
+  # Vision backbone.
+  vision_backbone: resnet18
+  pretrained_backbone_weights: ResNet18_Weights.IMAGENET1K_V1
+  replace_final_stride_with_dilation: false
+  # Transformer layers.
+  pre_norm: false
+  dim_model: 512
+  n_heads: 8
+  dim_feedforward: 3100
+  feedforward_activation: relu
+  n_encoder_layers: 4
+  dropout: 0.1
+
+  num_guide_points: 10
+  guide_pts_downsample: 1
+  num_latents: 1
+  guide_pts_corr_dim: 128
+  guide_pts_heatmap_sigma: 1.5
+  sample: False
+
+  arp_cfg: 
+    n_embd: 512  # or 256, 128
+    embd_pdrop: 0.1 
+
+    num_layers: 4
+    layer_cfg:
+      n_head: 8
+      mlp_ratio: 4.0
+      AdaLN: True
+      mlp_dropout: 0.1
+      attn_kwargs: { "attn_pdrop": 0.1, "resid_pdrop": 0.1 }
+      cond_attn_kwargs: { "attn_pdrop": 0.1, "resid_pdrop": 0.1 }
+
+
