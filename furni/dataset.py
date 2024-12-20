@@ -139,7 +139,7 @@ class FurnitureOfflineDataset(Dataset):
             # 3D EE delta position, 4D EE delta rotation (quaternion), and 1D gripper.Range to [-1, 1].
             action_ee_delta_positions = [item[:3] for item in action_traj[start_idx:start_idx+self.seq_len]]
             action_ee_delta_quaternions = [item[3:7] for item in action_traj[start_idx:start_idx+self.seq_len]]
-            action_gripper_ranges = [item[7] for item in action_traj[start_idx:start_idx+self.seq_len]]
+            action_gripper_ranges = [item[7:] for item in action_traj[start_idx:start_idx+self.seq_len]]
 
             batch["state_ee_position"].append(state_ee_positions)
             batch["state_ee_quaternion"].append(state_ee_quaternions)
