@@ -97,7 +97,7 @@ train:
   demo_folder: ./furniture_bench_data/low_compressed/lamp
   epochs: 100 # 100
   num_gpus: 1
-  num_workers: 8 #, need larger value
+  num_workers: 1 #, need larger value
   num_transitions_per_epoch: 160000
   disp_freq: 100
   cached_dataset_path: null

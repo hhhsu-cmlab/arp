@@ -136,6 +136,7 @@ def main_single(rank: int, cfg: DictConfig, port: int, log_dir:str):
 
 @configurable()
 def main(cfg: DictConfig):
+    print(OmegaConf.to_yaml(cfg, resolve=True))
     if cfg.train.num_gpus <= 1:
         main_single(0, cfg, -1, cfg.output_dir)
     else:
