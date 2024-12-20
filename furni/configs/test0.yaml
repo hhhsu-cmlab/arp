@@ -5,7 +5,7 @@ hydra:
     name: default
 
 resume: false
-device: cpu # cuda:1
+device: cuda:0
 use_amp: false
 seed: 1000
 
@@ -48,7 +48,7 @@ training:
   save_checkpoint: true
   num_workers: 4
 
-  batch_size: 8
+  batch_size: 16
   lr: 1e-5
   lr_backbone: 1e-5
   weight_decay: 1e-4
@@ -139,7 +139,7 @@ policy:
   sample: False
 
   arp_cfg: 
-    n_embd: 512  # or 256, 128
+    n_embd: 256  # or 256, 128
     embd_pdrop: 0.1 
 
     num_layers: 4

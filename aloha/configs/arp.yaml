@@ -139,7 +139,7 @@ policy:
   sample: False
 
   arp_cfg: 
-    n_embd: 512  # or 256, 128
+    n_embd: 256  # or 256, 128
     embd_pdrop: 0.1 
 
     num_layers: 4

@@ -336,6 +336,7 @@ class PolicyNetwork(nn.Module):
             # the 0, 0 are dummy input
             seq = torch.as_tensor([0, 0, self.policy.token_name_2_ids['stage1-screen-pts']], device=dev).reshape(1, 1, 3).repeat(bs, 1, 1)
             tmp_loss_dict = defaultdict(list)
+
             for view_id in range(3):
                 _loss_dict = self.policy.compute_loss(seq, stage1_chk_ids, match_layer='cross',
                             contexts={
@@ -343,7 +344,7 @@ class PolicyNetwork(nn.Module):
                                 'visual-featmap': visual_featmap_1[:, view_id],
                                 'smooth-heatmap': smooth_spatial_label_stage1[:, :, view_id]
                             })
-                import pdb; pdb.set_trace()
+
                 for k, v in _loss_dict.items():
                     tmp_loss_dict[k].append(v)
             

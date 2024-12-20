@@ -1364,7 +1364,7 @@ if __name__ == "__main__":
             device: str =  "cuda:0"
             num_workers: int = 0
             max_iters: int = 5000
-            batch_size: int = 64
+            batch_size: int = 42
             learning_rate: float = 5e-4
             betas: Tuple[float, float] = (0.9, 0.95)
             weight_decay: float = 0.1 # only applied on matmul weights
@@ -1429,6 +1429,7 @@ if __name__ == "__main__":
             tks = torch.cat([tk_vals, tk_ids], dim=-1)
 
             chk_ids = torch.arange(0, tks.size(1), device=tks.device)[None, :] # generate one at a time
+            import pdb; pdb.set_trace()
             loss_dict = model.compute_loss(tks, chk_ids, contexts={'class_emb': y_emb[:, None, :]})
             loss = sum(loss_dict.values()) 
 
