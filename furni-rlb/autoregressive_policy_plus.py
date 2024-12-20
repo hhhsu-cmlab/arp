@@ -1,5 +1,6 @@
 from math import ceil
 from copy import deepcopy
+import matplotlib.pyplot as plt
 import wandb
 from collections import defaultdict, ChainMap
 from omegaconf import DictConfig
@@ -8,6 +9,8 @@ from torch import nn
 from einops import rearrange, repeat
 from typing import Optional, Tuple
 import torch
+import torchvision.transforms as T
+from torchvision import models
 
 import torchvision
 import numpy as np
@@ -46,6 +49,12 @@ class PolicyNetwork(nn.Module):
         model_cfg: see the "model.hp" key in config yaml file
         '''
         super().__init__()
+
+
+        self.resnet = models.resnet50(pretrained=True)
+        self.resnet.eval()  # Ensure the model is in evaluation mode
+        self.fc = nn.Linear(1000, model_cfg.arp_cfg["n_embd"])
+
         # self._num_rotation_classes = model_cfg.num_rotation_classes
         # self._rotation_resolution = 360 / self._num_rotation_classes
         # self._image_resolution = [env_cfg.image_size, env_cfg.image_size]
@@ -309,7 +318,64 @@ class PolicyNetwork(nn.Module):
 
             tks = torch.cat([tk_vals, tk_ids], dim=-1) # [batch_size, num_tokens, max_dim_of_given_tokens + 1]
 
-            encoder_out = torch.rand(batch_size, 1, self.arp_cfg["n_embd"], device=self.device)
+            front_camera_rgb_image = batch["front_camera_rgb"]
+            # print(type(front_camera_rgb_image))
+            # print(front_camera_rgb_image.shape)
+
+            transform = T.Compose([
+                        T.ToPILImage(),  # 將 Tensor 轉換為 PIL Image
+                        T.Resize((224, 224)),  # 調整大小
+                        T.ToTensor(),  # 將 PIL Image 轉換為 Tensor
+                        T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # 正規化
+            ])
+
+                        
+            # # 假設 front_camera_rgb_image 的形狀為 [batch_size, 1, 224, 224, 3]
+            # # 取出批次中的第一張影像，形狀為 [1, 224, 224, 3]
+            # image_tensor = front_camera_rgb_image[0]
+
+            # # 移除不必要的維度，形狀變為 [224, 224, 3]
+            # image_tensor = image_tensor.squeeze(0)
+
+            # # 將張量從 GPU 移動到 CPU（如果尚未在 CPU 上）
+            # image_tensor = image_tensor.cpu() /255.0
+            # # 將張量數據類型轉換為 numpy 陣列
+            # image_np = image_tensor.numpy()
+
+            # # print(image_np)
+
+
+            # # 顯示影像
+            # plt.imshow(image_np)
+            # plt.title("Front Camera RGB Image")
+            # plt.axis("off")
+            # plt.show()
+
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            # 對每張圖片進行編碼
+            encoder_out=[]
+            for i in range(batch_size):
+                img = front_camera_rgb_image[i]
+                img = img.squeeze(0)  # 擠壓掉不必要的維度，現在 img 形狀應該是 [224, 224, 3]
+                img = img.permute(2, 0, 1)
+                # print(img.shape)  # 確認 img 的形狀
+                img = transform(img)  # 現在可以正常進行轉換
+                img = img.unsqueeze(0)  # 增加批次維度
+
+                img = img.half()  # 將輸入數據轉換為 float16
+
+                with torch.no_grad():
+                    img = img.to(device)
+                    features = self.resnet(img)
+                    # print(features.shape) # 查看輸出形狀
+                    embedding = self.fc(features)
+                encoder_out.append(embedding)
+
+            encoder_out = torch.stack(encoder_out)
+
+
+            # encoder_out = torch.rand(batch_size, 1, self.arp_cfg["n_embd"], device=self.device)
+            # print(encoder_out.shape)
 
             loss_dict = self.policy.compute_loss(tks, chk_ids=None, contexts={'visual-tokens': encoder_out})
 
