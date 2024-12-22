@@ -25,6 +25,7 @@ from torch.utils.data import Dataset, DataLoader, RandomSampler
 # from rlbench.backend.const import DEPTH_SCALE
 
 import pickle
+from functools import lru_cache
 
 
 # def get_demo_essential_info(data_path, episode_ind):
@@ -302,10 +303,10 @@ import pickle
 #                         sampler=sampler, num_workers=num_workers, pin_memory_device=pin_memory_device), sampler
     
 class FurnitureOfflineDataset(Dataset):
-    def __init__(self, data_dir, batch_size, seq_len, batch_num: int=1000):
+    def __init__(self, data_dir, batch_size, max_seq_len, batch_num: int=1000):
         super().__init__()
         self.bs = batch_size
-        self.seq_len = seq_len
+        self.max_seq_len = max_seq_len
         self.data_dir = data_dir
         self.batch_num = batch_num
 
@@ -313,8 +314,17 @@ class FurnitureOfflineDataset(Dataset):
 
     def __len__(self):
         return self.batch_num
-
-    def __getitem__(self, idx):
+    
+    @lru_cache(maxsize=8)
+    def load_data(self, filename):
+        with open(os.path.join(self.data_dir, filename), 'rb') as f:
+            data = pickle.load(f)
+        return data
+    
+    def __make_batch(self, seq_len):
+        '''
+        Makes a batch where every item has shape (self.bs, seq_len, feature_dim...).
+        '''
         batch = {
             "state_ee_position": [],
             "state_ee_quaternion": [],
@@ -331,25 +341,25 @@ class FurnitureOfflineDataset(Dataset):
             "front_camera_rgb": []
         }
 
-        n_tries = 0 # number of tries to sample a subsequence from episode
+        success = True
         for _ in range(self.bs):
-            if n_tries > 3 * self.batch_num:
-                raise ValueError("Cannot sample enough subsequences for batch. seq_len might be too large.")
+            # if n_tries > 3 * self.batch_num:
+            #     raise ValueError("Cannot sample enough subsequences for batch. seq_len might be too large.")
 
             # sample a random file
             fn = random.choice(self.filenames)
-            with open(os.path.join(self.data_dir, fn), 'rb') as f:
-                data = pickle.load(f)
+            data = self.load_data(fn)
 
             state_traj = [item["robot_state"] for item in data["observations"]]
             action_traj = data["actions"]
             episode_len = len(action_traj) # notice that len(state_traj) == len(action_traj) + 1
 
-            # get a subsequence of length self.seq_len
-            n_tries += 1
-            if episode_len < self.seq_len:
-                continue
-            start_idx = random.randint(0, episode_len - self.seq_len)
+            # get a subsequence of length seq_len
+            if episode_len < seq_len:
+                success = False
+                return dict(), success
+            
+            start_idx = random.randint(0, episode_len - seq_len)
 
             # Each item below is of the following form:
             # {
@@ -362,14 +372,14 @@ class FurnitureOfflineDataset(Dataset):
             #     'joint_torques': Joint torques (7,)
             #     'gripper_width': Gripper width (1,)
             # }
-            sub_state_traj = state_traj[start_idx:(start_idx+self.seq_len)]
+            sub_state_traj = state_traj[start_idx:(start_idx + seq_len)]
 
-            wrist_camera_rgbs = []
-            for i in range(start_idx, start_idx+self.seq_len):
-                wrist_camera_rgbs.append(data["observations"][i]["color_image1"])
-            front_camera_rgbs = []
-            for i in range(start_idx, start_idx+self.seq_len):
-                front_camera_rgbs.append(data["observations"][i]["color_image2"])
+            # wrist_camera_rgbs = []
+            # for i in range(start_idx, start_idx + seq_len):
+            #     wrist_camera_rgbs.append(data["observations"][i]["color_image1"])
+            # front_camera_rgbs = []
+            # for i in range(start_idx, start_idx + seq_len):
+            #     front_camera_rgbs.append(data["observations"][i]["color_image2"])
 
             state_ee_positions = [item["ee_pos"] for item in sub_state_traj]
             state_ee_quaternions = [item["ee_quat"] for item in sub_state_traj]
@@ -382,9 +392,9 @@ class FurnitureOfflineDataset(Dataset):
 
             # each item below is an array of shape (8,)
             # 3D EE delta position, 4D EE delta rotation (quaternion), and 1D gripper.Range to [-1, 1].
-            action_ee_delta_positions = [item[:3] for item in action_traj[start_idx:start_idx+self.seq_len]]
-            action_ee_delta_quaternions = [item[3:7] for item in action_traj[start_idx:start_idx+self.seq_len]]
-            action_gripper_ranges = [item[7:] for item in action_traj[start_idx:start_idx+self.seq_len]]
+            action_ee_delta_positions = [item[:3] for item in action_traj[start_idx:(start_idx+seq_len)]]
+            action_ee_delta_quaternions = [item[3:7] for item in action_traj[start_idx:(start_idx+seq_len)]]
+            action_gripper_ranges = [item[7:] for item in action_traj[start_idx:(start_idx+seq_len)]]
 
             batch["state_ee_position"].append(state_ee_positions)
             batch["state_ee_quaternion"].append(state_ee_quaternions)
@@ -398,13 +408,29 @@ class FurnitureOfflineDataset(Dataset):
             batch["action_ee_delta_quaternion"].append(action_ee_delta_quaternions)
             batch["action_gripper_range"].append(action_gripper_ranges)
 
-            batch["wrist_camera_rgb"].append(wrist_camera_rgbs)
-            batch["front_camera_rgb"].append(front_camera_rgbs)
+            # add camera images in the beginning of the sequence
+            batch["wrist_camera_rgb"].append(data["observations"][start_idx]["color_image1"])
+            batch["front_camera_rgb"].append(data["observations"][start_idx]["color_image2"])
 
         # change to torch tensor
         for k, v in batch.items():
             batch[k] = torch.tensor(np.array(v), dtype=torch.float32)
 
+        return batch, success
+
+
+    def __getitem__(self, idx):
+        '''
+        Returns: a batch where every item has shape (self.bs, seq_len, feature_dim...),
+                 where seq_len is random
+        '''
+
+        success = False
+        batch: dict
+        seq_len = random.randint(1, self.max_seq_len)
+        while not success:
+            batch, success = self.__make_batch(seq_len)
+            seq_len = random.randint(1, seq_len - 1)
         return batch
     
     def dataloader(self, num_workers=1, pin_memory=True, distributed=False, pin_memory_device=''):
@@ -418,17 +444,19 @@ class FurnitureOfflineDataset(Dataset):
                         sampler=sampler, num_workers=num_workers, pin_memory_device=pin_memory_device), sampler
 
 if __name__ == "__main__":
+    from tqdm import tqdm
     dataset = FurnitureOfflineDataset(
         data_dir="./furniture_bench_data/low_compressed/lamp",
         batch_size=16,
-        seq_len=32
+        max_seq_len=100
     )
     dataloader, sampler = dataset.dataloader(pin_memory=False, distributed=False)
 
     print(f"Number of batches: {len(dataloader)}\n")
 
     print(f"The keys and the values' shapes of each batch:")
-    for batch in dataloader:
+    for i, batch in tqdm(enumerate(dataloader)):
+        if i >= 10:
+            break
         for k, v in batch.items():
             print(f"{k}: {v.shape}          dtype: {v.dtype}")
-        break
