@@ -311,8 +311,6 @@ class FurnitureOfflineDataset(Dataset):
 
         self.filenames = [fn for fn in os.listdir(self.data_dir) if fn.endswith('.pkl')]
 
-        assert seq_len == 1, "seq_len > 1 is not supported yet."
-
     def __len__(self):
         return self.batch_num
 
@@ -420,27 +418,17 @@ class FurnitureOfflineDataset(Dataset):
                         sampler=sampler, num_workers=num_workers, pin_memory_device=pin_memory_device), sampler
 
 if __name__ == "__main__":
-    # only_key_frames_ratios = {
-    #   "place_cups": 1,
-    #   "stack_cups": 1,
-    #   "close_jar": 1,
-    #   "push_buttons": 1,
-    #   "meat_off_grill": 1,
-    #   "stack_blocks": 1,
-    #   "reach_and_drag": 1,
-    #   "slide_block_to_color_target": 1,
-    #   "place_shape_in_shape_sorter": 1,
-    #   "open_drawer": 1,
-    #   "sweep_to_dustpan_of_size": 1,
-    #   "put_groceries_in_cupboard": 1,
-    #   "light_bulb_in": 1,
-    #   "turn_tap": 1,
-    #   "insert_onto_square_peg": 1,
-    #   "put_item_in_drawer": 1,
-    #   "put_money_in_safe": 1,
-    #   "place_wine_at_rack_location": 1
-    # }
-    # D = TransitionDataset("./data/train", ["open_drawer"],
-    #                       origin_style_state=True, time_in_state=False, k2k_sample_ratios=only_key_frames_ratios)
-    # D[0]
-    pass
+    dataset = FurnitureOfflineDataset(
+        data_dir="./furniture_bench_data/low_compressed/lamp",
+        batch_size=16,
+        seq_len=32
+    )
+    dataloader, sampler = dataset.dataloader(pin_memory=False, distributed=False)
+
+    print(f"Number of batches: {len(dataloader)}\n")
+
+    print(f"The keys and the values' shapes of each batch:")
+    for batch in dataloader:
+        for k, v in batch.items():
+            print(f"{k}: {v.shape}          dtype: {v.dtype}")
+        break

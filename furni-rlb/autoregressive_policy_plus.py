@@ -180,6 +180,13 @@ class PolicyNetwork(nn.Module):
         self.id_2_token_names = [""] * len(self.policy.token_name_2_ids)
         for name, id in self.policy.token_name_2_ids.items():
             self.id_2_token_names[id] = name
+
+        self.transform = T.Compose([
+                        T.ToPILImage(),  # 將 Tensor 轉換為 PIL Image
+                        T.Resize((224, 224)),  # 調整大小
+                        T.ToTensor(),  # 將 PIL Image 轉換為 Tensor
+                        T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # 正規化
+        ])
         
         # gripper state only depends on xyz, but not rotation
         # self.block_attn_directions = [(n, f'rot-{c}') for c in ['x', 'y', 'z'] for n in ['grip', 'collision']]
@@ -310,30 +317,37 @@ class PolicyNetwork(nn.Module):
 
     def forward(self, batch):
         batch_size = batch["state_ee_position"].size(0)
+        seq_len = batch["state_ee_position"].size(1)
+        n_tokens = len(self.id_2_token_names)
 
 
         if self.training: # this is true if self.train() is called
 
+            # each item in token_tensors has shape [batch_size, seq_len, dim]
             token_tensors = [batch[token_name] for token_name in self.id_2_token_names]
 
-            # tk_vals: [batch_size, num_tokens, max_dim_of_given_tokens]
-            # tk_ids: [batch_size, num_tokens, 1]
-            tk_vals = cat_uneven_blc_tensors(*token_tensors) 
-            tk_ids = torch.arange(len(self.id_2_token_names), device=self.device)[None, :, None].repeat(tk_vals.size(0), 1, 1)
+            max_dim = max([t.size(-1) for t in token_tensors])
+            tks = torch.zeros([batch_size, n_tokens * seq_len, max_dim + 1], device=self.device, dtype=torch.float32)
+            for s in range(seq_len):
+                for i, t in enumerate(token_tensors):
+                    tks[:, s * n_tokens + i, :t.size(-1)] = t[:, s]
+            
+            # fill in token ids
+            tks[:, :, -1] = torch.arange(n_tokens, device=self.device)[None, :].repeat(batch_size, seq_len, 1).flatten()
 
-            tks = torch.cat([tk_vals, tk_ids], dim=-1) # [batch_size, num_tokens, max_dim_of_given_tokens + 1]
+            # # tk_vals: [batch_size, num_tokens, max_dim_of_given_tokens]
+            # # tk_ids: [batch_size, num_tokens, 1]
+            # tk_vals = cat_uneven_blc_tensors(*token_tensors) 
+            # tk_ids = torch.arange(len(self.id_2_token_names), device=self.device)[None, :, None].repeat(tk_vals.size(0), 1, 1)
+
+            # tks = torch.cat([tk_vals, tk_ids], dim=-1) # [batch_size, num_tokens, max_dim_of_given_tokens + 1]
 
             front_camera_rgb_image = batch["front_camera_rgb"]
+
             wrist_camera_rgb_image = batch["wrist_camera_rgb"]
+
             # print(type(front_camera_rgb_image))
             # print(front_camera_rgb_image.shape)
-
-            transform = T.Compose([
-                        T.ToPILImage(),  # 將 Tensor 轉換為 PIL Image
-                        T.Resize((224, 224)),  # 調整大小
-                        T.ToTensor(),  # 將 PIL Image 轉換為 Tensor
-                        T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # 正規化
-            ])
 
                         
             # # 假設 front_camera_rgb_image 的形狀為 [batch_size, 1, 224, 224, 3]
@@ -363,7 +377,10 @@ class PolicyNetwork(nn.Module):
             for i in range(batch_size):
                 img = wrist_camera_rgb_image[i] # (224, 224, 3)
                 img = img.permute(2, 0, 1)
-                img = transform(img)  # 現在可以正常進行轉換
+
+                # print(img.shape)  # 確認 img 的形狀
+                img = self.transform(img)  # 現在可以正常進行轉換
+
                 img = img.unsqueeze(0)  # 增加批次維度
 
                 img = img.half()  # 將輸入數據轉換為 float16

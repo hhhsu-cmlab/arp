@@ -93,7 +93,8 @@ env:
   origin_style_state: true
 
 train:
-  bs: 16 # 48
+  bs: 24 # 48
+  seq_len: 32
   demo_folder: ./furniture_bench_data/low_compressed/lamp
   epochs: 100 # 100
   num_gpus: 1

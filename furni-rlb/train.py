@@ -107,7 +107,7 @@ def main_single(rank: int, cfg: DictConfig, port: int, log_dir:str):
     dataset = FurnitureOfflineDataset(
         data_dir=cfg.train.demo_folder, 
         batch_size=cfg.train.bs,
-        seq_len=1,
+        seq_len=cfg.train.seq_len,
         batch_num=total_batch_num
     )
     
