@@ -311,6 +311,7 @@ class PolicyNetwork(nn.Module):
     def forward(self, batch):
         batch_size = batch["state_ee_position"].size(0)
 
+
         if self.training: # this is true if self.train() is called
 
             token_tensors = [batch[token_name] for token_name in self.id_2_token_names]
@@ -323,6 +324,7 @@ class PolicyNetwork(nn.Module):
             tks = torch.cat([tk_vals, tk_ids], dim=-1) # [batch_size, num_tokens, max_dim_of_given_tokens + 1]
 
             front_camera_rgb_image = batch["front_camera_rgb"]
+            wrist_camera_rgb_image = batch["wrist_camera_rgb"]
             # print(type(front_camera_rgb_image))
             # print(front_camera_rgb_image.shape)
 
@@ -359,10 +361,8 @@ class PolicyNetwork(nn.Module):
             # 對每張圖片進行編碼
             encoder_out=[]
             for i in range(batch_size):
-                img = front_camera_rgb_image[i]
-                img = img.squeeze(0)  # 擠壓掉不必要的維度，現在 img 形狀應該是 [224, 224, 3]
+                img = wrist_camera_rgb_image[i] # (224, 224, 3)
                 img = img.permute(2, 0, 1)
-                # print(img.shape)  # 確認 img 的形狀
                 img = transform(img)  # 現在可以正常進行轉換
                 img = img.unsqueeze(0)  # 增加批次維度
 
@@ -372,10 +372,26 @@ class PolicyNetwork(nn.Module):
                     img = img.to(device)
                     features = self.resnet(img)
                     # print(features.shape) # 查看輸出形狀
-                    embedding = self.fc(features)
-                encoder_out.append(embedding)
+                    embedding_1 = self.fc(features)
+                embedding_1 = embedding_1.squeeze(0)
+                
+                img = front_camera_rgb_image[i] # (224, 224, 3)
+                img = img.permute(2, 0, 1)
+                img = transform(img)  # 現在可以正常進行轉換
+                img = img.unsqueeze(0)  # 增加批次維度
 
-            encoder_out = torch.stack(encoder_out)
+                img = img.half()  # 將輸入數據轉換為 float16
+
+                with torch.no_grad():
+                    img = img.to(device)
+                    features = self.resnet(img)
+                    # print(features.shape) # 查看輸出形狀
+                    embedding_2 = self.fc(features)
+                embedding_2 = embedding_2.squeeze(0)
+
+                encoder_out.append(torch.cat((embedding_1, embedding_2), dim=0))
+
+            encoder_out = torch.stack(encoder_out).to(device)
 
 
             # encoder_out = torch.rand(batch_size, 1, self.arp_cfg["n_embd"], device=self.device)
