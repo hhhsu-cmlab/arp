@@ -66,6 +66,8 @@ model:
 
     render_with_cpp: true
 
+    resnet: 50 # 18 or 50
+
     arp_cfg: 
       n_embd: 128  # or 256, 512
       embd_pdrop: 0.1 
@@ -94,7 +96,7 @@ env:
 
 train:
   bs: 24 # 48
-  seq_len: 32
+  seq_len: 100
   demo_folder: ./furniture_bench_data/low_compressed/lamp
   epochs: 100 # 100
   num_gpus: 1

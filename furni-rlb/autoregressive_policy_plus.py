@@ -50,10 +50,16 @@ class PolicyNetwork(nn.Module):
         '''
         super().__init__()
 
-
-        self.resnet = models.resnet18(pretrained=True)
+        if model_cfg.resnet == 18:
+            self.resnet = models.resnet18(pretrained=True)
+        elif model_cfg.resnet == 50:
+            self.resnet = models.resnet50(pretrained=True)
+        else:
+            raise NotImplementedError(f"Unknown resnet version: {model_cfg.resnet}")
+        
+        assert model_cfg.arp_cfg["n_embd"] % 2 == 0
         self.resnet.eval()  # Ensure the model is in evaluation mode
-        self.fc = nn.Linear(1000, model_cfg.arp_cfg["n_embd"])
+        self.fc = nn.Linear(1000, model_cfg.arp_cfg["n_embd"] // 2)
 
         # self._num_rotation_classes = model_cfg.num_rotation_classes
         # self._rotation_resolution = 360 / self._num_rotation_classes
@@ -331,9 +337,10 @@ class PolicyNetwork(nn.Module):
             for s in range(seq_len):
                 for i, t in enumerate(token_tensors):
                     tks[:, s * n_tokens + i, :t.size(-1)] = t[:, s]
-            
+
             # fill in token ids
-            tks[:, :, -1] = torch.arange(n_tokens, device=self.device)[None, :].repeat(batch_size, seq_len, 1).flatten()
+            for s in range(seq_len):
+                tks[:, s * n_tokens : (s + 1) * n_tokens, -1] = torch.arange(n_tokens, device=self.device)
 
             # # tk_vals: [batch_size, num_tokens, max_dim_of_given_tokens]
             # # tk_ids: [batch_size, num_tokens, 1]
@@ -394,7 +401,7 @@ class PolicyNetwork(nn.Module):
                 
                 img = front_camera_rgb_image[i] # (224, 224, 3)
                 img = img.permute(2, 0, 1)
-                img = transform(img)  # 現在可以正常進行轉換
+                img = self.transform(img)  # 現在可以正常進行轉換
                 img = img.unsqueeze(0)  # 增加批次維度
 
                 img = img.half()  # 將輸入數據轉換為 float16
@@ -408,8 +415,7 @@ class PolicyNetwork(nn.Module):
 
                 encoder_out.append(torch.cat((embedding_1, embedding_2), dim=0))
 
-            encoder_out = torch.stack(encoder_out).to(device)
-
+            encoder_out = torch.stack(encoder_out).unsqueeze(1).to(device) # (batch_size, 1, n_embd)
 
             # encoder_out = torch.rand(batch_size, 1, self.arp_cfg["n_embd"], device=self.device)
             # print(encoder_out.shape)

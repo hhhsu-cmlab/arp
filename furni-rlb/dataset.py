@@ -430,7 +430,8 @@ class FurnitureOfflineDataset(Dataset):
         seq_len = random.randint(1, self.max_seq_len)
         while not success:
             batch, success = self.__make_batch(seq_len)
-            seq_len = random.randint(1, seq_len - 1)
+            if seq_len > 1:
+                seq_len = random.randint(1, seq_len - 1)
         return batch
     
     def dataloader(self, num_workers=1, pin_memory=True, distributed=False, pin_memory_device=''):
