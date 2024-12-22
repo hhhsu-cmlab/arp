@@ -42,6 +42,8 @@ from utils.layers import (
 from arp import AutoRegressivePolicy, TokenType, LayerType, ModelConfig, cat_uneven_blc_tensors
 from autoregressive_policy import MultiViewTransformer, Policy
 
+import vision_encoders as ve
+
 
 class PolicyNetwork(nn.Module):
     def __init__(self, model_cfg, env_cfg, render_device):
@@ -50,16 +52,14 @@ class PolicyNetwork(nn.Module):
         '''
         super().__init__()
 
-        if model_cfg.resnet == 18:
-            self.resnet = models.resnet18(pretrained=True)
-        elif model_cfg.resnet == 50:
-            self.resnet = models.resnet50(pretrained=True)
+        if model_cfg.vision_encoder == "resnet18":
+            self.vision_encoder = ve.ResnetEncoder(model_cfg, render_device)
+        elif model_cfg.vision_encoder == "resnet50":
+            self.vision_encoder = ve.ResnetEncoder(model_cfg, render_device)
+        elif model_cfg.vision_encoder == "dinov2":
+            self.vision_encoder = ve.DinoV2Encoder(model_cfg.arp_cfg["n_embd"], render_device)
         else:
             raise NotImplementedError(f"Unknown resnet version: {model_cfg.resnet}")
-        
-        assert model_cfg.arp_cfg["n_embd"] % 2 == 0
-        self.resnet.eval()  # Ensure the model is in evaluation mode
-        self.fc = nn.Linear(1000, model_cfg.arp_cfg["n_embd"] // 2)
 
         # self._num_rotation_classes = model_cfg.num_rotation_classes
         # self._rotation_resolution = 360 / self._num_rotation_classes
@@ -187,12 +187,6 @@ class PolicyNetwork(nn.Module):
         for name, id in self.policy.token_name_2_ids.items():
             self.id_2_token_names[id] = name
 
-        self.transform = T.Compose([
-                        T.ToPILImage(),  # 將 Tensor 轉換為 PIL Image
-                        T.Resize((224, 224)),  # 調整大小
-                        T.ToTensor(),  # 將 PIL Image 轉換為 Tensor
-                        T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # 正規化
-        ])
         
         # gripper state only depends on xyz, but not rotation
         # self.block_attn_directions = [(n, f'rot-{c}') for c in ['x', 'y', 'z'] for n in ['grip', 'collision']]
@@ -350,72 +344,8 @@ class PolicyNetwork(nn.Module):
             # tks = torch.cat([tk_vals, tk_ids], dim=-1) # [batch_size, num_tokens, max_dim_of_given_tokens + 1]
 
             front_camera_rgb_image = batch["front_camera_rgb"]
-
             wrist_camera_rgb_image = batch["wrist_camera_rgb"]
-
-            # print(type(front_camera_rgb_image))
-            # print(front_camera_rgb_image.shape)
-
-                        
-            # # 假設 front_camera_rgb_image 的形狀為 [batch_size, 1, 224, 224, 3]
-            # # 取出批次中的第一張影像，形狀為 [1, 224, 224, 3]
-            # image_tensor = front_camera_rgb_image[0]
-
-            # # 移除不必要的維度，形狀變為 [224, 224, 3]
-            # image_tensor = image_tensor.squeeze(0)
-
-            # # 將張量從 GPU 移動到 CPU（如果尚未在 CPU 上）
-            # image_tensor = image_tensor.cpu() /255.0
-            # # 將張量數據類型轉換為 numpy 陣列
-            # image_np = image_tensor.numpy()
-
-            # # print(image_np)
-
-
-            # # 顯示影像
-            # plt.imshow(image_np)
-            # plt.title("Front Camera RGB Image")
-            # plt.axis("off")
-            # plt.show()
-
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-            # 對每張圖片進行編碼
-            encoder_out=[]
-            for i in range(batch_size):
-                img = wrist_camera_rgb_image[i] # (224, 224, 3)
-                img = img.permute(2, 0, 1)
-
-                # print(img.shape)  # 確認 img 的形狀
-                img = self.transform(img)  # 現在可以正常進行轉換
-
-                img = img.unsqueeze(0)  # 增加批次維度
-
-                img = img.half()  # 將輸入數據轉換為 float16
-
-                with torch.no_grad():
-                    img = img.to(device)
-                    features = self.resnet(img)
-                    # print(features.shape) # 查看輸出形狀
-                    embedding_1 = self.fc(features)
-                embedding_1 = embedding_1.squeeze(0)
-                
-                img = front_camera_rgb_image[i] # (224, 224, 3)
-                img = img.permute(2, 0, 1)
-                img = self.transform(img)  # 現在可以正常進行轉換
-                img = img.unsqueeze(0)  # 增加批次維度
-
-                img = img.half()  # 將輸入數據轉換為 float16
-
-                with torch.no_grad():
-                    img = img.to(device)
-                    features = self.resnet(img)
-                    # print(features.shape) # 查看輸出形狀
-                    embedding_2 = self.fc(features)
-                embedding_2 = embedding_2.squeeze(0)
-
-                encoder_out.append(torch.cat((embedding_1, embedding_2), dim=0))
-
-            encoder_out = torch.stack(encoder_out).unsqueeze(1).to(device) # (batch_size, 1, n_embd)
+            encoder_out = self.vision_encoder(wrist_camera_rgb_image, front_camera_rgb_image)
 
             # encoder_out = torch.rand(batch_size, 1, self.arp_cfg["n_embd"], device=self.device)
             # print(encoder_out.shape)

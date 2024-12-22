@@ -66,7 +66,7 @@ model:
 
     render_with_cpp: true
 
-    resnet: 50 # 18 or 50
+    vision_encoder: "dinov2"
 
     arp_cfg: 
       n_embd: 128  # or 256, 512
