@@ -101,7 +101,7 @@ train:
   num_transitions_per_epoch: 160000
   disp_freq: 100
   cached_dataset_path: null
-  save_freq: 10000
+  save_freq: 2000
   eval_mode: false
   k2k_sample_ratios: 
     place_cups: 1.0

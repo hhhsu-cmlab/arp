@@ -51,7 +51,7 @@ class PolicyNetwork(nn.Module):
         super().__init__()
 
 
-        self.resnet = models.resnet50(pretrained=True)
+        self.resnet = models.resnet18(pretrained=True)
         self.resnet.eval()  # Ensure the model is in evaluation mode
         self.fc = nn.Linear(1000, model_cfg.arp_cfg["n_embd"])
 
@@ -144,16 +144,20 @@ class PolicyNetwork(nn.Module):
                     name='state_ee_angular_velocity', is_continuous=True, dim=3, embedding='linear', predictor='gmm', 
                     predictor_kwargs={'num_latents': self.arp_cfg["num_latents"]}
                 ),
+                # TokenType.make(
+                #     name='state_joint_positions', is_continuous=True, dim=7, embedding='linear', predictor='gmm', 
+                #     predictor_kwargs={'num_latents': self.arp_cfg["num_latents"]}
+                # ),
+                # TokenType.make(
+                #     name='state_joint_velocities', is_continuous=True, dim=7, embedding='linear', predictor='gmm', 
+                #     predictor_kwargs={'num_latents': self.arp_cfg["num_latents"]}
+                # ),
+                # TokenType.make(
+                #     name='state_joint_torques', is_continuous=True, dim=7, embedding='linear', predictor='gmm', 
+                #     predictor_kwargs={'num_latents': self.arp_cfg["num_latents"]}
+                # ),
                 TokenType.make(
-                    name='state_joint_positions', is_continuous=True, dim=7, embedding='linear', predictor='gmm', 
-                    predictor_kwargs={'num_latents': self.arp_cfg["num_latents"]}
-                ),
-                TokenType.make(
-                    name='state_joint_velocities', is_continuous=True, dim=7, embedding='linear', predictor='gmm', 
-                    predictor_kwargs={'num_latents': self.arp_cfg["num_latents"]}
-                ),
-                TokenType.make(
-                    name='state_joint_torques', is_continuous=True, dim=7, embedding='linear', predictor='gmm', 
+                    name='state_gripper_width', is_continuous=True, dim=1, embedding='linear', predictor='gmm',
                     predictor_kwargs={'num_latents': self.arp_cfg["num_latents"]}
                 ),
                 TokenType.make(
