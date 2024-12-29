@@ -1,3 +1,20 @@
+# Can a Robotic Arm Assemble Furniture?
+### Training
+To train the ARP-based model using offline Furniture-Bench datasets, cd to `furni-rlb` directory and run
+```
+python3 train.py config=./configs/arp_plus.yaml  hydra.job.name=<JOB_NAME_YOU_LIKE>  train.num_gpus=1 train.seq_len=10
+```
+Since we use hydra, you can override the config such as adding `train.bs=48` to change the batch size or `wandb=<WANDB_PROJECT_NAME>` to log the metrics to wandb.
+
+Also, you can choose which vision encoder to use by overriding `model.hp.vision_encoder`. The current available choices are `"resnet18"`, `"resnet50"`, and `"dinov2"`. 
+
+### Evaluation
+To evaluate the model on the Furniture-Bench simulator, cd to `rpl-final-eval` directory and run
+```
+python -m run run_prefix=$(date "+%Y-%m-%d-%H-%M-%S") rolf.demo_path=furniture_dataset_processed/low/lamp/ env.furniture=lamp  gpu=0 is_train=False init_ckpt_path=<PATH_TO_CHECKPOINT>
+```
+
+
 # Autoregressive Action Sequence Learning for Robotic Manipulation
 
 [![arXiv](https://img.shields.io/badge/arXiv-2410.03132-b31b1b.svg)](https://arxiv.org/abs/2410.03132)  [![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/autoregressive-action-sequence-learning-for/robot-manipulation-on-rlbench)](https://paperswithcode.com/sota/robot-manipulation-on-rlbench?autoregressive-action-sequence-learning-for)

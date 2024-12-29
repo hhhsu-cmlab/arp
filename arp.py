@@ -1194,6 +1194,8 @@ class AutoRegressivePolicy(nn.Module):
             for k, v in loss_dict.items(): 
                 losses[f'{token["name"]}.{k}'] += v
 
+            #import pdb; pdb.set_trace()
+
         loss_dict = {k: sum(v) / len(v) for k, v in losses.items()}
         if log_prob:
             return loss_dict, cond_log_probs
@@ -1429,7 +1431,7 @@ if __name__ == "__main__":
             tks = torch.cat([tk_vals, tk_ids], dim=-1)
 
             chk_ids = torch.arange(0, tks.size(1), device=tks.device)[None, :] # generate one at a time
-            import pdb; pdb.set_trace()
+            #import pdb; pdb.set_trace()
             loss_dict = model.compute_loss(tks, chk_ids, contexts={'class_emb': y_emb[:, None, :]})
             loss = sum(loss_dict.values()) 
 
